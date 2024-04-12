@@ -1380,7 +1380,7 @@ class relaYL():
         cons = torch.logical_and(con1,con2)
         cond = cons.repeat((1, 1, 1, relativeObject.shape[-1]))
         relativeZero = torch.zeros_like(relativeObject)
-        relativeObject[cond] = relativeObject[cond]
+        relativeObject[cond] = relativeZero[cond]
 
         return relativeObject, relativeWall, relativeWindoor
 
