@@ -1,0 +1,112 @@
+data:
+    dataset_type: "cached_threedfront"
+    encoding_type: "cached_diffusion_cosin_angle_objfeatsnorm_lat32_wocm" #"cached_diffusion_wocm_no_prm"
+    dataset_directory: "../../data/3d_front_processed/bedrooms_objfeats_32_64"
+    annotation_file: "../config/bedroom_threed_front_splits.csv"
+    path_to_invalid_scene_ids: "../config/invalid_threed_front_rooms.txt"
+    path_to_invalid_bbox_jids: "../config/black_list.txt"
+    augmentations: ["fixed_rotations"]
+    filter_fn: "threed_front_bedroom" #"no_filtering"
+    train_stats: "dataset_stats.txt"
+    room_layout_size: "64,64"
+    process_wall: true
+    process_windoor: true
+    max_length: 12
+    max_wall: 12
+    max_windoor: 8
+
+network:
+    type: "diffusion_scene_layout_ddpm"
+    # denoising network
+    net_type: "unet1d"
+    process_wall: true
+    independent_wall: true
+    process_windoor: true
+    independent_windoor: true
+
+    # concate squarewish layer
+    point_dim: 30 #62 #29
+    latent_dim: 0
+    room_mask_condition: false # not use room_mask 
+    sample_num_points: 12 # max_length 
+    maxWall: 12
+    maxWindoor: 8
+
+    objectness_dim: 0
+    class_dim: 22
+    angle_dim: 2
+    objfeat_dim: 0 
+
+    # class condition
+    #learnable_embedding: true
+    instance_condition: false
+    #instance_emb_dim: 128
+    # diffusion config
+    diffusion_kwargs:
+        schedule_type: 'linear'
+        beta_start: 0.0001
+        beta_end: 0.02
+        time_num: 1000 
+        loss_type: 'mse'
+        model_mean_type: 'eps'
+        angle_normalize: true
+        rotate_translation: false
+        model_var_type: 'fixedsmall'
+        loss_separate: true
+        loss_iou: true
+        train_stats_file: "../../data/3d_front_processed/bedrooms_objfeats_32_64/dataset_stats.txt"
+
+    net_kwargs:
+        dim: 512
+        dim_mults: [1, 1]
+        channels: 30 #62 
+        objectness_dim: 0
+        class_dim: 22
+        angle_dim: 2
+        objfeat_dim: 0 #32
+        ind_dim: 5
+        rel_wall_dim: 6
+        rel_windoor_dim: 7
+        rpe: true
+        context_dim: 0
+        instanclass_dim: 0
+        seperate_all: true  # separate all
+        #self_condition: true
+        # merge_bbox: true 
+        # modulate_time_context_instanclass: true
+
+feature_extractor:
+    name: "resnet18"
+    feature_size: 64
+    freeze_bn: true
+    input_channels: 1
+
+training:
+    splits: ["train", "val"]
+    epochs: 405
+    steps_per_epoch: 500
+    batch_size: 128
+    save_frequency: 50
+    max_grad_norm: 10
+    # optimizer
+    optimizer: Adam
+    weight_decay: 0.0
+    # schedule
+    schedule: 'step'
+    lr: 0.0008
+    lr_step: 100
+    lr_decay: 0.5
+
+validation:
+    splits: ["test"]
+    frequency: 10
+    batch_size: 128
+    gen_traj: false
+    num_step: 50
+    gen_gt: false
+    gen_prob_map: false
+
+logger:
+    type: "wandb"
+    project: "diffuscene"
+ 
