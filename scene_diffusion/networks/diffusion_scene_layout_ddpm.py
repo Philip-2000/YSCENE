@@ -92,7 +92,8 @@ class DiffusionSceneLayout_DDPM(Module):
         self.instance_emb_dim = config.get("instance_emb_dim", 64)
         self.process_wall = config.get("process_wall", False)
         self.process_windoor = config.get("process_windoor", False)
-        self.distance_matrix = ( config["diffusion_kwargs"].get("loss_type", "mse") == "rel" )
+        self.distance_matrix = ( config.get("rel_loss_rate", -1) > 0 )
+        self.full_matrix = ( config.get("rel_loss_rate", -1) > 0 )
         #self.class_condition = config.get("class_condition", False)
         #self.class_emb_dim = config.get("class_emb_dim", 64)
         
@@ -248,6 +249,7 @@ class DiffusionSceneLayout_DDPM(Module):
         loss, loss_dict = self.diffusion.get_loss_iter(room_layout_target, condition=condition, condition_cross=condition_cross,
                                 wallTensor=sample_params["wa"] if self.process_wall else None,
                                 windoorTensor=sample_params["wd"] if self.process_windoor else None,
+                                fullMat=sample_params["matrix_full"] if self.full_matrix else None,
                                 disMat=sample_params["matrix"] if self.distance_matrix else None)
 
         return loss, loss_dict

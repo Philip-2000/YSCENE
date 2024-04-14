@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import os
+import torch.nn.functional as F
 from scene_diffusion.networks.modules_yl import relaYL
 
 class A():
@@ -68,10 +69,13 @@ def relative_loss(relaCal, data_start, mat, mat_dis, data_recon):#这个函数�
 
     #按照mat_dis的倒数作为权重进行加权求和
     mat_d = torch.ones_like(mat_dis) / (torch.ones_like(mat_dis) + mat_dis)
+    mat_dZero = torch.zeros_like(mat_d)
+    mat_d[cond] = mat_dZero[cond]
+    mat_d = F.normalize(mat_d,dim=list(range(1, len(mat_d.shape))))
 
     loss = ((mat_recon-mat)**2) * mat_d.reshape((relaCal.batchsz,relaCal.maxObj,relaCal.maxObj,1)).repeat((1,1,1,mat_recon.shape[-1]))
 
-    return loss
+    return loss.sum(dim=list(range(1, len(mat_d.shape))))
 
 a = "bed"
 dsDir = "../data/3d_front_processed/"+a+"rooms_objfeats_32_64/"

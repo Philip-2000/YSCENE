@@ -14,6 +14,7 @@ from einops import rearrange, reduce
 from .loss import axis_aligned_bbox_overlaps_3d
 from .modules_yl import relaYL
 from .denoise_yl import Unet1DYL
+from .relative_loss import relative_loss
 
 def norm(v, f):
     v = (v - v.min())/(v.max() - v.min()) - 0.5
@@ -126,6 +127,7 @@ class GaussianDiffusion:
         self.angle_dim = config.get("angle_dim", 1)
         self.bbox_dim = self.translation_dim + self.size_dim + self.angle_dim
         self.objfeat_dim = config.get("objfeat_dim", 0)
+        self.rel_loss_rate = config.get("rel_loss_rate", -1)
         self.process_wall = config.get("process_wall", False)
         self.process_windoor = config.get("process_windoor", False)
         self.loss_separate = loss_separate
@@ -191,6 +193,9 @@ class GaussianDiffusion:
 
         self.angle_normalize = angle_normalize
         self.rotate_translation = rotate_translation
+        self.ind_dim = config["net_kwargs"].get("ind_dim", 0)
+        if self.process_wall or self.process_windoor or (self.ind_dim > 0):
+            self.rela_calculator = relaYL(config)
 
     @staticmethod
     def _extract(a, t, x_shape):
@@ -438,7 +443,7 @@ class GaussianDiffusion:
 
         return (kl, pred_xstart) if return_pred_xstart else kl
 
-    def p_losses(self, denoise_fn, data_start, t, noise=None, condition=None, condition_cross=None, wallTensor=None, windoorTensor=None, disMat=None):
+    def p_losses(self, denoise_fn, data_start, t, noise=None, condition=None, condition_cross=None, wallTensor=None, windoorTensor=None, disMat=None, fullMat=None):
         """
         Training loss calculation
         """
@@ -502,13 +507,17 @@ class GaussianDiffusion:
                         losses += loss_objfeat
                 else:
                     losses = ((target - denoise_out)**2).mean(dim=list(range(1, len(data_start.shape))))
+
+                if self.model_mean_type == 'eps':
+                    x_recon = self._predict_xstart_from_eps(data_t, t, eps=denoise_out)
+                else:
+                    x_recon = denoise_out
+
+                if self.rel_loss_rate > 0:
+                    losses += self.rel_loss_rate * relative_loss(self.rela_calculator, data_start, fullMat, disMat, x_recon)
                     
                 if self.loss_iou:
                     # get x_recon & valid mask 
-                    if self.model_mean_type == 'eps':
-                        x_recon = self._predict_xstart_from_eps(data_t, t, eps=denoise_out)
-                    else:
-                        x_recon = denoise_out
                     trans_recon = x_recon[:, :, 0:self.translation_dim]
                     sizes_recon = x_recon[:, :, self.translation_dim:self.translation_dim+self.size_dim]
                     if self.objectness_dim >0:
@@ -729,7 +738,7 @@ class DiffusionPoint(nn.Module):
         #assert out.shape == torch.Size([B, D, N])
         return out
 
-    def get_loss_iter(self, data, noises=None, condition=None, condition_cross=None, wallTensor=None, windoorTensor=None, disMat=None):
+    def get_loss_iter(self, data, noises=None, condition=None, condition_cross=None, wallTensor=None, windoorTensor=None, disMat=None, fullMat=None):
         
         if len(data.shape) == 3:
             B, D, N = data.shape
@@ -741,7 +750,7 @@ class DiffusionPoint(nn.Module):
             noises[t!=0] = torch.randn((t!=0).sum(), *noises.shape[1:]).to(noises)
 
         losses, loss_dict = self.diffusion.p_losses(
-            denoise_fn=self._denoise, data_start=data, t=t, noise=noises, condition=condition, condition_cross=condition_cross, wallTensor=wallTensor, windoorTensor=windoorTensor, disMat=disMat)
+            denoise_fn=self._denoise, data_start=data, t=t, noise=noises, condition=condition, condition_cross=condition_cross, wallTensor=wallTensor, windoorTensor=windoorTensor, disMat=disMat, fullMat=fullMat)
         assert losses.shape == t.shape == torch.Size([B])
         return losses.mean(), loss_dict
     

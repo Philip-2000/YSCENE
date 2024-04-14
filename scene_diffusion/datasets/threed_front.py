@@ -418,6 +418,9 @@ class CachedThreedFront(ThreedFront):
             data_dict[ "wd" ] = WD["cont"]
         if self._process_windoor:
             data_dict[ "wa" ] = WA["contour"]
+        if self._distance_matrix:            
+            data_dict[ "matrix" ] = E["matrix"]
+            data_dict[ "matrix_full" ] = EF["matrix_full"]
         
         return data_dict
 
