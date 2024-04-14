@@ -247,6 +247,7 @@ class CachedRoom(object):
         objfeats,
         objfeats_32,
         matrix,
+        matrix_full,
         wa,
         wd,
         image_path
@@ -263,6 +264,7 @@ class CachedRoom(object):
         self.objfeats = objfeats
         self.objfeats_32 = objfeats_32
         self.matrix = matrix
+        self.matrix_full = matrix_full
         self.wa = wa
         self.wd = wd
         self.image_path = image_path
@@ -342,6 +344,7 @@ class CachedThreedFront(ThreedFront):
         D = np.load(self._path_to_rooms[i])
         if self._distance_matrix:
             E = np.load(self._path_to_rooms[i][:-9] + "matrix.npz")
+            EF= np.load(self._path_to_rooms[i][:-9] + "matrix_full.npz")
         if self._process_wall:
             WA = np.load(self._path_to_rooms[i][:-9] + "contours.npz")
             for p in range(len(WA["contour"])):
@@ -365,6 +368,7 @@ class CachedThreedFront(ThreedFront):
             objfeats=D["objfeats"] if "objfeats" in D.keys() else None,
             objfeats_32=D["objfeats_32"] if "objfeats_32" in D.keys() else None,
             matrix=E["matrix"] if self._distance_matrix else None,
+            matrix_full=EF["matrix_full"] if self._distance_matrix else None,
             wa=WA["contour"] if self._process_wall else None,
             wd=WD["cont"] if self._process_windoor else None,
             image_path=self._path_to_renders[i]
@@ -372,6 +376,9 @@ class CachedThreedFront(ThreedFront):
 
     def get_room_params(self, i):
         D = np.load(self._path_to_rooms[i])
+        if self._distance_matrix:
+            E = np.load(self._path_to_rooms[i][:-9] + "matrix.npz")
+            EF= np.load(self._path_to_rooms[i][:-9] + "matrix_full.npz")
         if self._process_wall:
             WA = np.load(self._path_to_rooms[i][:-9] + "contours.npz")
             for p in range(len(WA["contour"])):
@@ -399,6 +406,8 @@ class CachedThreedFront(ThreedFront):
             "angles": D["angles"],
             "cen": D["floor_plan_centroid"],
             #"scene_id": D["scene_id"],
+            #"matrix": E["matrix"],
+            #"matrix_full": EF["matrix_full"],
 
         }
         if "objfeats" in D.keys():
