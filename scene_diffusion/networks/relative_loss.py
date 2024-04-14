@@ -53,7 +53,7 @@ def relative_loss(relaCal, data_start, mat, mat_dis, data_recon):#这个函数�
     con = (end_label > torch.zeros_like(end_label))
     con1 = con.reshape((relaCal.batchsz,1,relaCal.maxObj)).repeat((1,relaCal.maxObj,1))
     con2 = con.reshape((relaCal.batchsz,relaCal.maxObj,1)).repeat((1,1,relaCal.maxObj))
-    cons = torch.logical_and(con1,con2)
+    cons = torch.logical_or(con1,con2)
     cond = cons.reshape((relaCal.batchsz,relaCal.maxObj,relaCal.maxObj,1)).repeat((1,1,1,mat_recon.shape[-1]))
     #cond.shape    (batchsz=128) : (src_dim=1) : (dst_dim=maxObj=12) 
     

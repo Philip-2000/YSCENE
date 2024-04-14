@@ -1250,8 +1250,8 @@ class relaYL():
         cl_class_labels = absoluteTensor[:,:,self.bbox_dim:self.bbox_dim+self.class_dim] #shape (batchsz=128) : (maxObj=12) : (feat_dim = 22)
         of_objfeats_32 = absoluteTensor[:,:,self.bbox_dim+self.class_dim:]
 
-        xx_sizes = bb_sizes.reshape((self.batchsz,-1, 1, 3))
-        yy_sizes = bb_sizes.reshape((self.batchsz, 1,-1, 3))
+        xx_sizes = bb_sizes.reshape((self.batchsz,-1, 1, self.size_dim))
+        yy_sizes = bb_sizes.reshape((self.batchsz, 1,-1, self.size_dim))
 
         if self.relativeScale:
             if self.relativeScaleMethod == "minus":
@@ -1266,9 +1266,10 @@ class relaYL():
             newRel = (newRel / xx_sizes).reshape((self.batchsz,-1,self.maxObj,3))
 
         if square:
-            cond = (end_label > torch.zeros_like(end_label)).reshape((self.batchsz, 1, self.maxObj))
-            
-            resultTensor = torch.cat([newRel, relTheta], axis = -1)
+            xx_class = cl_class_labels.reshape((self.batchsz,-1, 1, self.class_dim))
+            yy_class = cl_class_labels.reshape((self.batchsz, 1,-1, self.class_dim))
+            relClass = xx_class - yy_class
+            resultTensor = torch.cat([newRel, relTheta, relClass], axis = -1)
             return resultTensor
 
         if visual:  #[3 + 3 + 2] state = 2: translated - rotated - scaling 
@@ -1377,7 +1378,7 @@ class relaYL():
         relativeObject = self.distance(absoluteTensor, True)
         con1 = con.reshape((self.batchsz, -1, 1, 1))
         con2 = con.reshape((self.batchsz,  1,-1, 1))
-        cons = torch.logical_and(con1,con2)
+        cons = torch.logical_or(con1,con2)
         cond = cons.repeat((1, 1, 1, relativeObject.shape[-1]))
         relativeZero = torch.zeros_like(relativeObject)
         relativeObject[cond] = relativeZero[cond]
