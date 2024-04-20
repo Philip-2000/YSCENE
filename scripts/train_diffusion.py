@@ -229,7 +229,7 @@ def main(argv):
             for k, v in sample.items():
                 if not isinstance(v, list):
                     sample[k] = v.to(device)
-            batch_loss = train_on_batch(network, optimizer, sample, config)
+            batch_loss = train_on_batch(network, optimizer, sample, config, epoch=i, batch=b)
             StatsLogger.instance().print_progress(i+1, b+1, batch_loss)
 
         if (i % save_every) == 0:

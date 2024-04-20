@@ -944,19 +944,19 @@ class Diffusion(DatasetDecoratorBase):
                 sample_params_target[k] = np.concatenate([singleWa, np.repeat( singleWa[-1:], maxW-M, axis = 0) ], axis = 0)
                 #print(singleWa)       
 
-            elif k == "matrix":
-                p = np.copy(v)
+            elif k == "matrix_full":
+                p = np.copy(v[0])
                 # Set the attributes to for the end symbol
                 L, M, C = p.shape
                 a = np.concatenate([p,np.zeros((L,max_length - M,C))],axis=1)
                 sample_params_target[k] = np.concatenate([a,np.zeros((max_length-L,max_length,C))],axis=0)
 
-            elif k == "matrix_full":
+            elif k == "matrix":
                 p = np.copy(v)
                 # Set the attributes to for the end symbol
-                L, M, C = p.shape
-                a = np.concatenate([p,np.zeros((L,max_length - M,C))],axis=1)
-                sample_params_target[k] = np.concatenate([a,np.zeros((max_length-L,max_length,C))],axis=0)
+                L, M = p.shape
+                a = np.concatenate([p,np.zeros((L,max_length - M))],axis=1)
+                sample_params_target[k] = np.concatenate([a,np.zeros((max_length-L,max_length))],axis=0)
 
             elif k == "class_labels":
                 class_labels = np.copy(v)

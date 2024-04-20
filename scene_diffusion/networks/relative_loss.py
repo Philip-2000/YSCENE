@@ -47,7 +47,7 @@ def preprocess_mat(data_start, mat_dis): #在这个函数里暂时还没有paddi
     return True, mat, dismat
 
 def relative_loss(relaCal, data_start, mat, mat_dis, data_recon):#这个函数里的mat和mat_dis都是一整个batch长度的，而且长度都做了padding
-    mat_recon = relaCal.distance(data_recon, True)
+    mat_recon = relaCal.distance(data_recon, True)[:,:,:,:relaCal.translation_dim+relaCal.angle_dim]
 
     end_label = data_start[:,:,relaCal.bbox_dim+relaCal.class_dim-1:relaCal.bbox_dim+relaCal.class_dim] #30???????
     #end_label.shape : (batchsz = 128) : (ambiguous_dim = maxObj = 12) : (label_dim = 1)
@@ -70,12 +70,12 @@ def relative_loss(relaCal, data_start, mat, mat_dis, data_recon):#这个函数�
     #按照mat_dis的倒数作为权重进行加权求和
     mat_d = torch.ones_like(mat_dis) / (torch.ones_like(mat_dis) + mat_dis)
     mat_dZero = torch.zeros_like(mat_d)
-    mat_d[cond] = mat_dZero[cond]
+    mat_d[cons] = mat_dZero[cons]
     mat_d = F.normalize(mat_d,dim=list(range(1, len(mat_d.shape))))
 
     loss = ((mat_recon-mat)**2) * mat_d.reshape((relaCal.batchsz,relaCal.maxObj,relaCal.maxObj,1)).repeat((1,1,1,mat_recon.shape[-1]))
 
-    return loss.sum(dim=list(range(1, len(mat_d.shape))))
+    return loss.sum(dim=list(range(1, len(loss.shape))))
 
 a = "bed"
 dsDir = "../data/3d_front_processed/"+a+"rooms_objfeats_32_64/"

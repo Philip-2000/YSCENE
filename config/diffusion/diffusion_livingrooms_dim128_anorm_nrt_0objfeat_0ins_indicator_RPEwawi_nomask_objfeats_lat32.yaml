@@ -9,6 +9,7 @@ data:
     filter_fn: "threed_front_livingroom" #"no_filtering"
     train_stats: "dataset_stats.txt"
     room_layout_size: "64,64"
+    distance_matrix: true
     process_wall: true
     process_windoor: true
     max_length: 21
@@ -23,6 +24,7 @@ network:
     independent_wall: true
     process_windoor: true
     independent_windoor: true
+    rel_loss_rate: 0.1
 
     # concate squarewish layer
     point_dim: 33 #62 #29
@@ -46,7 +48,7 @@ network:
         schedule_type: 'linear'
         beta_start: 0.0001
         beta_end: 0.02
-        time_num: 1000 
+        time_num: 2000 
         loss_type: 'mse'
         model_mean_type: 'eps'
         angle_normalize: true

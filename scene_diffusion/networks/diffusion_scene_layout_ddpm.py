@@ -144,7 +144,7 @@ class DiffusionSceneLayout_DDPM(Module):
 
     '''training'''
 
-    def get_loss(self, sample_params):
+    def get_loss(self, sample_params, rel_loss_rate=-1):
         # Unpack the sample_params
         if self.objectness_dim >0:
             objectness   = sample_params["objectness"]
@@ -246,11 +246,13 @@ class DiffusionSceneLayout_DDPM(Module):
                 condition_cross = condition_cross.repeat(num_repeat, 1, 1)
 
         # denoise loss function
-        loss, loss_dict = self.diffusion.get_loss_iter(room_layout_target, condition=condition, condition_cross=condition_cross,
-                                wallTensor=sample_params["wa"] if self.process_wall else None,
-                                windoorTensor=sample_params["wd"] if self.process_windoor else None,
-                                fullMat=sample_params["matrix_full"] if self.full_matrix else None,
-                                disMat=sample_params["matrix"] if self.distance_matrix else None)
+        loss, loss_dict = self.diffusion.get_loss_iter(room_layout_target, condition=condition, condition_cross=condition_cross
+                                ,wallTensor=sample_params["wa"] if self.process_wall else None
+                                ,windoorTensor=sample_params["wd"] if self.process_windoor else None
+                                ,fullMat=sample_params["matrix_full"] if self.full_matrix else None
+                                ,disMat=sample_params["matrix"] if self.distance_matrix else None
+                                ,rel_loss_rate=rel_loss_rate
+                                )
 
         return loss, loss_dict
 
@@ -465,12 +467,13 @@ class DiffusionSceneLayout_DDPM(Module):
             }
 
 num_steps = 0
-def train_on_batch(model, optimizer, sample_params, config):
+def train_on_batch(model, optimizer, sample_params, config, epoch, batch):
     global num_steps
     # Make sure that everything has the correct size
     optimizer.zero_grad()
     # Compute the loss
-    loss, loss_dict = model.get_loss(sample_params)
+    rel_loss_rate = 0.005 * (epoch // 5000)
+    loss, loss_dict = model.get_loss(sample_params,rel_loss_rate=rel_loss_rate)
     for k, v in loss_dict.items():
         StatsLogger.instance()[k].value = v.item()
     # Do the backpropagation

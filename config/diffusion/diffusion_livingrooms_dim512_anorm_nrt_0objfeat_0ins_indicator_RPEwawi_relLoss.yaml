@@ -66,7 +66,7 @@ network:
         class_dim: 25
         angle_dim: 2
         objfeat_dim: 0 #32
-        ind_dim: 5
+        ind_dim: 30
         rel_wall_dim: 6
         rel_windoor_dim: 7
         rpe: true

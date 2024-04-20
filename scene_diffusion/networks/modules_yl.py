@@ -624,7 +624,7 @@ class relaYL():
 class relaYL():
     def __init__(self, config):
         #all kinds of dimensions here
-        self.batchsz = config.get("batchsz", 4)
+        self.batchsz = config.get("batchsz", 128)
 
         #................basic length of the data structure...................
             #.........absoluteTensor.....................
@@ -1144,6 +1144,7 @@ class relaYL():
         # (translation_dim=3)+(size_dim=3)+(angle_dim=2) + (class_dim = 2?) + (objfeat_dim = 32)
         # (             bbox_dim   =   8    cosA, sinA )
         # (                          point_dim     =     6?                                    )
+        self.batchsz = absoluteTensor.shape[0]
         xx = absoluteTensor.reshape((self.batchsz,-1,1,self.point_dim))
         if prt:
             print("xx")

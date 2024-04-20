@@ -443,7 +443,7 @@ class GaussianDiffusion:
 
         return (kl, pred_xstart) if return_pred_xstart else kl
 
-    def p_losses(self, denoise_fn, data_start, t, noise=None, condition=None, condition_cross=None, wallTensor=None, windoorTensor=None, disMat=None, fullMat=None):
+    def p_losses(self, denoise_fn, data_start, t, noise=None, condition=None, condition_cross=None, wallTensor=None, windoorTensor=None, disMat=None, fullMat=None, rel_loss_rate=-1):
         """
         Training loss calculation
         """
@@ -513,8 +513,9 @@ class GaussianDiffusion:
                 else:
                     x_recon = denoise_out
 
-                if self.rel_loss_rate > 0:
-                    losses += self.rel_loss_rate * relative_loss(self.rela_calculator, data_start, fullMat, disMat, x_recon)
+                if rel_loss_rate > 0 and self.rel_loss_rate > 0:#raise NotImplementedError
+                    fromT = torch.ones_like(t) - torch.clamp(t / (self.num_timesteps/2), min=0, max=1)
+                    losses += (fromT * rel_loss_rate) * relative_loss(self.rela_calculator, data_start, fullMat, disMat, x_recon)
                     
                 if self.loss_iou:
                     # get x_recon & valid mask 
@@ -567,7 +568,7 @@ class GaussianDiffusion:
                 denoise_fn=denoise_fn, data_start=data_start, data_t=data_t, t=t, condition=condition, condition_cross=condition_cross, clip_denoised=False,
                 return_pred_xstart=False)
         elif self.loss_type == 'rel':
-            
+            raise NotImplementedError
             rela_t = self.rela_calculator.rela(data_t, wallTensor, windoorTensor)
             denoise_out = denoise_fn(rela_t, t, condition, condition_cross)
             x_recon = self.rela_calculator.recon(data_t, denoise_out)
@@ -738,7 +739,7 @@ class DiffusionPoint(nn.Module):
         #assert out.shape == torch.Size([B, D, N])
         return out
 
-    def get_loss_iter(self, data, noises=None, condition=None, condition_cross=None, wallTensor=None, windoorTensor=None, disMat=None, fullMat=None):
+    def get_loss_iter(self, data, noises=None, condition=None, condition_cross=None, wallTensor=None, windoorTensor=None, disMat=None, fullMat=None, rel_loss_rate=-1):
         
         if len(data.shape) == 3:
             B, D, N = data.shape
@@ -750,7 +751,7 @@ class DiffusionPoint(nn.Module):
             noises[t!=0] = torch.randn((t!=0).sum(), *noises.shape[1:]).to(noises)
 
         losses, loss_dict = self.diffusion.p_losses(
-            denoise_fn=self._denoise, data_start=data, t=t, noise=noises, condition=condition, condition_cross=condition_cross, wallTensor=wallTensor, windoorTensor=windoorTensor, disMat=disMat, fullMat=fullMat)
+            denoise_fn=self._denoise, data_start=data, t=t, noise=noises, condition=condition, condition_cross=condition_cross, wallTensor=wallTensor, windoorTensor=windoorTensor, disMat=disMat, fullMat=fullMat, rel_loss_rate=rel_loss_rate)
         assert losses.shape == t.shape == torch.Size([B])
         return losses.mean(), loss_dict
     
