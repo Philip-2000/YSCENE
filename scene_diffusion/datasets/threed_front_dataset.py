@@ -520,6 +520,29 @@ class Scale_CosinAngle_ObjfeatsNorm(DatasetDecoratorBase):
                 )
         return sample_params
 
+    def pre_process(self, s):
+        bounds = self.bounds
+        sample_params = {}
+        for k, v in s.items():
+            if k == "room_layout" or k == "class_labels" or k == "relations" or k == "description" or k == "desc_emb":
+                sample_params[k] = v
+                
+            elif k == "angles":
+                # theta = arctan sin/cos y/x
+                sample_params[k] = np.concatenate([np.cos(v[:, :, :1]), np.sin(v[:, :, :1])],axis=-1)
+                
+            elif k == "objfeats" or k == "objfeats_32":
+                sample_params[k] = Scale.scale(
+                    v, bounds[k][1], bounds[k][2]
+                )
+
+            else:
+                sample_params[k] = Scale.scale(
+                    v, bounds[k][0], bounds[k][1]
+                )
+
+        return sample_params
+
     def post_process(self, s):
         bounds = self.bounds
         sample_params = {}
@@ -590,6 +613,9 @@ class Permutation(DatasetDecoratorBase):
         for k in self._permutation_keys:
             sample_params[k] = sample_params[k][ordering]
         return sample_params
+
+    def pre_process(self, s):
+        return self._dataset.pre_process(s)
 
 
 class OrderedDataset(DatasetDecoratorBase):
@@ -998,6 +1024,55 @@ class Diffusion(DatasetDecoratorBase):
     @property
     def bbox_dims(self):
         return 7
+
+    def pre_process(self, s, transform=False):
+        #return self._dataset.pre_process(s)
+        max_length = self._dataset.max_length
+        if transform:
+            s = {
+                "class_labels":s[:,:,:-7],
+                "translations":s[:,:,-7:-4],
+                "sizes":s[:,:,-4:-1],
+                "angles":s[:,:,-1:]
+            }
+
+        s = self._dataset.pre_process(s)
+        sample_params_target = {}
+        for k, v in s.items():
+            if k == "class_labels":
+                class_labels = np.copy(v[0])
+                # Delete the start label 
+                new_class_labels = np.concatenate([class_labels, -np.ones((class_labels.shape[0],1))],axis=-1) #hstack
+                L, C = new_class_labels.shape
+                # Pad the end label in the end of each sequence, and convert the class labels to -1, 1
+                end_label = np.eye(C)[-1]
+                sample_params_target[k] = np.vstack([
+                    new_class_labels, np.tile(end_label[None, :], [max_length - L, 1])
+                ]).astype(np.float32) * 2.0 - 1.0 
+
+            elif k == "angles" and v.shape[-1] == 2:
+                p = np.copy(v[0])
+                zero_angle_single = np.array([1.0, 0.0])
+                zero_angle = np.tile(zero_angle_single[None, :], [max_length - v.shape[1], 1])
+                sample_params_target[k] = np.vstack([p, zero_angle]).astype(np.float32)
+
+            else:
+                p = np.copy(v[0])
+                # Set the attributes to for the end symbol
+                L, C = p.shape
+                sample_params_target[k] = np.vstack([p, np.tile(np.zeros(C)[None, :], [max_length - L, 1])]).astype(np.float32)
+
+        if transform:
+            sample_params_target = np.concatenate([
+                [sample_params_target["translations"]],
+                [sample_params_target["sizes"]],
+                [sample_params_target["angles"]],
+                [sample_params_target["class_labels"]]
+            ], axis=-1)
+
+        sample_params_target = torch.Tensor(sample_params_target)
+
+        return sample_params_target
     
 
 def dataset_encoding_factory(

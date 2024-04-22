@@ -405,6 +405,24 @@ class GaussianDiffusion:
         assert img_t.shape == shape
         return img_t
 
+    def p_continue_loop(self, denoise_fn, shape, device, condition, condition_cross,
+                      start_value, start_step=0, end_step=-100, noise_fn=torch.randn, clip_denoised=True, wallTensor=None, windoorTensor=None, keep_running=False):
+        """
+        Generate samples
+        keep_running: True if we run 2 x num_timesteps, False if we just run num_timesteps
+
+        """
+
+        assert isinstance(shape, (tuple, list))
+        img_t = start_value
+        for t in reversed(range(end_step, start_step)):
+            t_ = torch.empty(shape[0], dtype=torch.int64, device=device).fill_(max(t,0))
+            img_t = self.p_sample(denoise_fn=denoise_fn, data=img_t,t=t_, condition=condition, condition_cross=condition_cross, noise_fn=noise_fn,
+                                  clip_denoised=clip_denoised, return_pred_xstart=False, wallTensor=wallTensor, windoorTensor=windoorTensor)
+
+        assert img_t.shape == shape
+        return img_t
+
     def p_sample_loop_trajectory(self, denoise_fn, shape, device, freq, condition, condition_cross,
                                  noise_fn=torch.randn,clip_denoised=True, wallTensor=None, windoorTensor=None, keep_running=False):
         """
@@ -423,6 +441,31 @@ class GaussianDiffusion:
         for t in reversed(range(0,total_steps)):
 
             t_ = torch.empty(shape[0], dtype=torch.int64, device=device).fill_(t)
+            img_t = self.p_sample(denoise_fn=denoise_fn, data=img_t, t=t_, condition=condition, condition_cross=condition_cross, noise_fn=noise_fn,
+                                  clip_denoised=clip_denoised,
+                                  return_pred_xstart=False, wallTensor=wallTensor, windoorTensor=windoorTensor)
+            if t % freq == 0 or t == total_steps-1:
+                imgs.append(img_t)
+
+        assert imgs[-1].shape == shape
+        return imgs
+
+    def p_continue_loop_trajectory(self, denoise_fn, shape, device, freq, condition, condition_cross,
+                                 start_value, start_step=0, end_step=-100, noise_fn=torch.randn, clip_denoised=True, wallTensor=None, windoorTensor=None, keep_running=False):
+        """
+        Generate samples, returning intermediate images
+        Useful for visualizing how denoised images evolve over time
+        Args:
+          repeat_noise_steps (int): Number of denoising timesteps in which the same noise
+            is used across the batch. If >= 0, the initial noise is the same for all batch elemements.
+        """
+        assert isinstance(shape, (tuple, list))
+
+        img_t = start_value
+        imgs = []
+        for t in reversed(range(end_step,start_step)):
+
+            t_ = torch.empty(shape[0], dtype=torch.int64, device=device).fill_(max(t,0))
             img_t = self.p_sample(denoise_fn=denoise_fn, data=img_t, t=t_, condition=condition, condition_cross=condition_cross, noise_fn=noise_fn,
                                   clip_denoised=clip_denoised,
                                   return_pred_xstart=False, wallTensor=wallTensor, windoorTensor=windoorTensor)
@@ -761,8 +804,20 @@ class DiffusionPoint(nn.Module):
                                             clip_denoised=clip_denoised, wallTensor=wallTensor, windoorTensor=windoorTensor,
                                             keep_running=keep_running)
 
+    def gen_continue(self, shape, device, condition=None, condition_cross=None, start_value=None, start_step=0, end_step=-100, noise_fn=torch.randn,
+                    clip_denoised=True, wallTensor=None, windoorTensor=None, keep_running=False):
+        return self.diffusion.p_continue_loop(self._denoise, shape=shape, device=device, condition=condition, condition_cross=condition_cross, start_value=start_value, start_step=start_step, end_step=end_step, noise_fn=noise_fn,
+                                            clip_denoised=clip_denoised, wallTensor=wallTensor, windoorTensor=windoorTensor,
+                                            keep_running=keep_running)
+
     def gen_sample_traj(self, shape, device, freq, condition=None, condition_cross=None, noise_fn=torch.randn,
                     clip_denoised=True, wallTensor=None, windoorTensor=None,keep_running=False):
         return self.diffusion.p_sample_loop_trajectory(self._denoise, shape=shape, device=device, condition=condition, condition_cross=condition_cross, noise_fn=noise_fn, freq=freq,
+                                                       clip_denoised=clip_denoised, wallTensor=wallTensor, windoorTensor=windoorTensor,
+                                                       keep_running=keep_running)
+
+    def gen_continue_traj(self, shape, device, freq, condition=None, condition_cross=None, start_value=None, start_step=0, end_step=-100, noise_fn=torch.randn,
+                    clip_denoised=True, wallTensor=None, windoorTensor=None,keep_running=False):
+        return self.diffusion.p_continue_loop_trajectory(self._denoise, shape=shape, device=device, condition=condition, condition_cross=condition_cross, start_value=start_value, start_step=start_step, end_step=end_step, noise_fn=noise_fn, freq=freq,
                                                        clip_denoised=clip_denoised, wallTensor=wallTensor, windoorTensor=windoorTensor,
                                                        keep_running=keep_running)

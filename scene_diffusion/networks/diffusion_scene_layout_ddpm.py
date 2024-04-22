@@ -336,12 +336,105 @@ class DiffusionSceneLayout_DDPM(Module):
         
         return samples
 
+    def Continue(self, room_mask, num_points, point_dim, batch_size=1, text=None, 
+               partial_boxes=None, input_boxes=None, ret_traj=False, ddim=False, start_value=None, start_step=0, end_step=-100, clip_denoised=False, freq=40, batch_seeds=None, wallTensor=None, windoorTensor=None, 
+                ):
+        device = room_mask.device
+        noise = torch.randn((1, num_points, point_dim))#, device=room_mask.device)
+
+        # get the latent feature of room_mask
+        if self.room_mask_condition:
+            room_layout_f = self.fc_room_f(self.feature_extractor(room_mask)) #(B, F)
+            
+        else:
+            room_layout_f = None
+
+        # process instance & class condition f
+        if self.instance_condition:
+            if self.learnable_embedding:
+                instance_indices = torch.arange(self.sample_num_points).long().to(device)[None, :].repeat(room_mask.size(0), 1)
+                instan_condition_f = self.positional_embedding[instance_indices, :]
+            else:
+                instance_label = torch.eye(self.sample_num_points).float().to(device)[None, ...].repeat(room_mask.size(0), 1, 1)
+                instan_condition_f = self.fc_instance_condition(instance_label) 
+        else:
+            instan_condition_f = None
+
+
+        # concat instance and class condition   
+        # concat room_layout_f and instan_class_f
+        if room_layout_f is not None and instan_condition_f is not None:
+            condition = torch.cat([room_layout_f[:, None, :].repeat(1, num_points, 1), instan_condition_f], dim=-1).contiguous()
+        elif room_layout_f is not None:
+            condition = room_layout_f[:, None, :].repeat(1, num_points, 1)
+        elif instan_condition_f is not None:
+            condition = instan_condition_f
+        else:
+            condition = None
+
+        # concat room_partial condition
+        if self.room_partial_condition:
+            partial_valid   = torch.ones((batch_size, self.partial_num_points, 1)).float().to(device)
+            ###partial_invalid = torch.ones((batch_size, num_points - self.partial_num_points, 1)).float().to(device)
+            partial_invalid = torch.zeros((batch_size, num_points - self.partial_num_points, 1)).float().to(device)
+            partial_mask    = torch.cat([ partial_valid, partial_invalid ], dim=1).contiguous()
+            partial_input   = input_boxes * partial_mask
+            partial_condition_f = self.fc_partial_condition(partial_input)
+            condition = torch.cat([condition, partial_condition_f], dim=-1).contiguous()
+
+        # concat  room_arrange condition
+        if self.room_arrange_condition:
+            arrange_input  = torch.cat([ input_boxes[:, :, self.translation_dim:self.translation_dim+self.size_dim], input_boxes[:, :, self.bbox_dim:] ], dim=-1).contiguous()
+            arrange_condition_f = self.fc_arrange_condition(arrange_input)
+            condition = torch.cat([condition, arrange_condition_f], dim=-1).contiguous()
+
+
+        if self.text_condition:
+            if self.text_glove_embedding:
+                condition_cross = self.fc_text_f(text) #sample_params["desc_emb"]
+            elif self.text_clip_embedding:
+                tokenized = clip.tokenize(text).to(device)
+                condition_cross = self.clip_model.encode_text(tokenized)
+            else:
+                tokenized = self.tokenizer(text, return_tensors='pt',padding=True).to(device)
+                #print('tokenized:', tokenized.shape)
+                text_f = self.bertmodel(**tokenized).last_hidden_state
+                print('after bert:', text_f.shape)
+                condition_cross = self.fc_text_f( text_f )
+        else:
+            condition_cross = None
+            
+
+        print('unconditional / conditional generation sampling')
+        # reverse sampling
+        if freq>0:
+            samples = self.diffusion.gen_continue_traj(noise.shape, room_mask.device, freq=freq, condition=condition, condition_cross=condition_cross, start_value=start_value, start_step=start_step, end_step=end_step, clip_denoised=clip_denoised, wallTensor=wallTensor, windoorTensor=windoorTensor)
+        else:
+            samples = self.diffusion.gen_continue(noise.shape, room_mask.device, condition=condition, condition_cross=condition_cross, start_value=start_value, start_step=start_step, end_step=end_step, clip_denoised=clip_denoised, wallTensor=wallTensor, windoorTensor=windoorTensor)
+        
+        return samples
+
     @torch.no_grad()
     def generate_layout(self, room_mask, num_points, point_dim, batch_size=1, text=None, ret_traj=False, ddim=False, clip_denoised=False, wallTensor=None, windoorTensor=None, batch_seeds=None, device="cpu", keep_empty=False):
         
         samples = self.sample(room_mask, num_points, point_dim, batch_size, text=text, ret_traj=ret_traj, ddim=ddim, clip_denoised=clip_denoised, wallTensor=wallTensor, windoorTensor=windoorTensor, batch_seeds=batch_seeds)
         
         return self.delete_empty_from_network_samples(samples, batch_size, device=device, keep_empty=keep_empty)
+
+    @torch.no_grad()
+    def optimize_layout(self, room_mask, num_points, point_dim, batch_size=1, text=None, ret_traj=False, ddim=False, clip_denoised=False, freq=1, start_value=None, start_step=0, end_step=-100, wallTensor=None, windoorTensor=None, batch_seeds=None, device="cpu", keep_empty=False):
+        
+        samples_traj = self.Continue(room_mask, num_points, point_dim, batch_size, text=text, ret_traj=ret_traj, ddim=ddim, clip_denoised=clip_denoised, freq=freq, start_value=start_value, start_step=start_step, end_step=end_step, wallTensor=wallTensor, windoorTensor=windoorTensor, batch_seeds=batch_seeds)
+        boxes_traj = {}
+
+        # delete the initial noisy
+        samples_traj = samples_traj[1:]
+
+        for i in range(len(samples_traj)):
+            samples = samples_traj[i]
+            boxes_traj[-i] = self.delete_empty_from_network_samples(samples, batch_size, device=device, keep_empty=keep_empty)
+        return boxes_traj
+
 
     @torch.no_grad()
     def generate_layout_progressive(self, room_mask, num_points, point_dim, batch_size=1, text=None, ret_traj=False, ddim=False, clip_denoised=False, wallTensor=None, windoorTensor=None, batch_seeds=None, device="cpu", keep_empty=False, num_step=100):
