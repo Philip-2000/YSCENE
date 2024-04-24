@@ -162,7 +162,7 @@ class DiffusionSceneLayout_DDPM(Module):
                 objfeats = sample_params["objfeats_32"]
             else:
                 objfeats = sample_params["objfeats"]
-        room_layout = sample_params["room_layout"]
+        room_layout = sample_params["room_layout"] if "room_layout" in sample_params else None
         batch_size, num_points, _ = class_labels.shape
 
         # get desired diffusion target

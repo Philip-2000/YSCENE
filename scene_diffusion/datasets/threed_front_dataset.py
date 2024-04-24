@@ -987,7 +987,8 @@ class Diffusion(DatasetDecoratorBase):
             elif k == "class_labels":
                 class_labels = np.copy(v)
                 # Delete the start label 
-                new_class_labels = np.concatenate([class_labels[:, :-2], class_labels[:, -1:]], axis=-1) #hstack
+                #new_class_labels = np.concatenate([class_labels[:, :-2], class_labels[:, -1:]], axis=-1) #hstack
+                new_class_labels = np.concatenate([class_labels, np.zeros((class_labels.shape[0],1))], axis=-1)
                 L, C = new_class_labels.shape
                 # Pad the end label in the end of each sequence, and convert the class labels to -1, 1
                 end_label = np.eye(C)[-1]

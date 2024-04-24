@@ -357,9 +357,9 @@ class CachedThreedFront(ThreedFront):
                 WD["cont"][p][2] -= D["floor_plan_centroid"][2]
         return CachedRoom(
             scene_id=D["scene_id"],
-            room_layout=self._get_room_layout(D["room_layout"]),
-            floor_plan_vertices=D["floor_plan_vertices"],
-            floor_plan_faces=D["floor_plan_faces"],
+            room_layout=self._get_room_layout(D["room_layout"]) if "room_layout" in D.keys() else None,
+            floor_plan_vertices=D["floor_plan_vertices"]  if "floor_plan_vertices" in D.keys() else None,
+            floor_plan_faces=D["floor_plan_faces"] if "floor_plan_faces" in D.keys() else None,
             floor_plan_centroid=D["floor_plan_centroid"],
             class_labels=D["class_labels"],
             translations=D["translations"],
@@ -390,16 +390,8 @@ class CachedThreedFront(ThreedFront):
                 WD["cont"][p][0] -= D["floor_plan_centroid"][0]
                 WD["cont"][p][2] -= D["floor_plan_centroid"][2]
         
-        room_rgb_2d = self.config.get('room_rgb_2d', False)
-        if room_rgb_2d:
-            room = self._get_room_rgb_2d(self._path_to_renders[i])
-            room = np.transpose(room[:, :, 0:3],  (2, 0, 1))
-        else:
-            room = self._get_room_layout(D["room_layout"])
-            room = np.transpose(room[:, :, None], (2, 0, 1))
-
         data_dict = {
-            "room_layout": room,
+            #"room_layout": room,
             "class_labels": D["class_labels"],
             "translations": D["translations"],
             "sizes": D["sizes"],
@@ -410,6 +402,16 @@ class CachedThreedFront(ThreedFront):
             #"matrix_full": EF["matrix_full"],
 
         }
+        if "room_layout" in D.keys():
+            room_rgb_2d = self.config.get('room_rgb_2d', False)
+            if room_rgb_2d:
+                room = self._get_room_rgb_2d(self._path_to_renders[i])
+                room = np.transpose(room[:, :, 0:3],  (2, 0, 1))
+            else:
+                room = self._get_room_layout(D["room_layout"])
+                room = np.transpose(room[:, :, None], (2, 0, 1))
+            data_dict["room_layout"] = room
+
         if "objfeats" in D.keys():
             data_dict[ "objfeats" ] = D["objfeats"]
         if "objfeats_32" in D.keys():
