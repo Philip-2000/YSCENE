@@ -293,12 +293,12 @@ def main(argv):
             )
             # Get a floor plan
             floor_plan_item, tr_floor_item, room_mask_item = floor_plan_from_scene(
-                current_scene, args.path_to_floor_plan_textures, no_texture=args.no_texture
+                current_scene, args.path_to_floor_plan_textures, without_room_mask=args.without_floor,no_texture=args.no_texture
             )
-            floor_plan.append(floor_plan_item)
-            tr_floor.append(tr_floor_item)
+            #floor_plan.append(floor_plan_item)
+            #tr_floor.append(tr_floor_item)
             room_mask.append(room_mask_item)
-        room_mask = torch.cat(room_mask, dim = 0)
+        room_mask = torch.cat(room_mask, dim = 0) #if not args.without_floor else torch.zeros((1,1))
 
         if not config["validation"]["gen_traj"]:        
             bbox_params = network.generate_layout(
@@ -324,10 +324,6 @@ def main(argv):
                     boxes["angles"]
                 ], dim=-1).cpu().numpy()
                 print('Generated bbox:', bbox_params_t.shape)
-
-                #if not args.without_floor:
-                    #renderables += floor_plan
-                    #trimesh_meshes += tr_floor
 
                 if args.render_top2down:
                     raise NotImplementedError()
@@ -457,10 +453,6 @@ def main(argv):
                     #renderables, trimesh_meshes, model_jids = get_textured_objects(
                     #    bbox_params_t, objects_dataset, classes, diffusion=True, no_texture=args.no_texture
                     #)
-                    
-                #if not args.without_floor:
-                    #renderables += floor_plan
-                    #trimesh_meshes += tr_floor
 
                     if args.render_top2down:
                         raise NotImplementedError()

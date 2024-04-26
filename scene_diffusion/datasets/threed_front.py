@@ -416,9 +416,9 @@ class CachedThreedFront(ThreedFront):
             data_dict[ "objfeats" ] = D["objfeats"]
         if "objfeats_32" in D.keys():
             data_dict[ "objfeats_32" ] = D["objfeats_32"]
-        if self._process_wall:            
+        if self._process_windoor:            
             data_dict[ "wd" ] = WD["cont"]
-        if self._process_windoor:
+        if self._process_wall:
             data_dict[ "wa" ] = WA["contour"]
         if self._distance_matrix:            
             data_dict[ "matrix" ] = E["matrix"]

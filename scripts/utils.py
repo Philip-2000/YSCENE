@@ -70,6 +70,7 @@ def floor_plan_renderable(room, color=(1.0, 1.0, 1.0, 1.0)):
     return Mesh.from_faces(vertices, faces, color)
 
 
+from PIL import Image, ImageDraw 
 def floor_plan_from_scene(
     scene,
     path_to_floor_plan_textures,
@@ -77,12 +78,42 @@ def floor_plan_from_scene(
     no_texture=False,
 ):
     if not without_room_mask:
-        room_mask = torch.from_numpy(
-            np.transpose(scene.room_mask[None, :, :, 0:1], (0, 3, 1, 2))
-        )
+        try:
+            room_mask = torch.from_numpy(
+                np.transpose(scene.room_mask[None, :, :, 0:1], (0, 3, 1, 2))
+            )
+        except:
+            if scene.wa is None:
+                print("wa is None")
+                raise NotImplementedError
+
+            #print(scene.wa)
+            #print(scene.floor_plan_centroid)
+            
+            sz = 128
+            rt = 25
+            ce = scene.floor_plan_centroid
+            xy = [ ((th[0] - ce[0])*rt + sz, (th[1] - ce[2])*rt + sz) for th in scene.wa]   
+    
+            img = Image.new("RGB", (sz*2,sz*2), "#000000")  
+            img1 = ImageDraw.Draw(img)   
+            img1.polygon(xy, fill ="#ffffff")  
+            pixels = img.load()
+            N = np.zeros((1,sz*2,sz*2,1))
+            for i in range(sz*2):
+                for j in range(sz*2):
+                    if pixels[i,j][0] > 100:
+                        N[0][i][j][0] = 1
+            #print(N, cnt, sz*sz*4)
+            room_mask = torch.from_numpy(
+                np.transpose(N, (0, 3, 1, 2))
+            )
+            #raise NotImplementedError
+
     else:
         room_mask = None
     # Also get a renderable for the floor plan
+    """
     if no_texture:
         floor, tr_floor = get_floor_plan_white(scene)
     else:
@@ -94,6 +125,8 @@ def floor_plan_from_scene(
             ]
         )
     return [floor], [tr_floor], room_mask
+    """
+    return [None], [None], room_mask
 
 
 def get_floor_plan(scene, floor_textures):
