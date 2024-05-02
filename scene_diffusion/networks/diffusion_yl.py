@@ -511,6 +511,44 @@ class GaussianDiffusion:
     def p_sample_loop_arrange(self, denoise_fn, shape, device, condition, condition_cross,
                       noise_fn=torch.randn, clip_denoised=True, keep_running=False, input_boxes=None):
         """
+        Complete samples based on partial samples
+        keep_running: True if we run 2 x num_timesteps, False if we just run num_timesteps
+
+        """
+
+        assert isinstance(shape, (tuple, list))
+        img_t = noise_fn(size=shape, dtype=torch.float, device=device)
+        for t in reversed(range(0, self.num_timesteps if not keep_running else len(self.betas))):
+            t_ = torch.empty(shape[0], dtype=torch.int64, device=device).fill_(t)
+
+            # diffusion clean scenes
+            noise =  noise_fn(size=input_boxes.shape, dtype=torch.float, device=device)
+            input_boxes_t = self.q_sample(x_start=input_boxes, t=t_, noise=noise)
+
+            img_t_trans = img_t[:, :, 0:self.translation_dim]
+            img_t_angle = img_t[:, :, self.translation_dim+self.size_dim:self.bbox_dim] 
+                
+            input_boxes_size  = input_boxes_t[:, :, self.translation_dim:self.translation_dim+self.size_dim]  
+            input_boxes_other = input_boxes_t[:, :, self.bbox_dim:] 
+            img_t = torch.cat([ img_t_trans, input_boxes_size, img_t_angle, input_boxes_other ], dim=-1).contiguous()
+
+            # reverse diffusion
+            img_t = self.p_sample(denoise_fn=denoise_fn, data=img_t,t=t_, condition=condition, condition_cross=condition_cross, noise_fn=noise_fn,
+                                clip_denoised=clip_denoised, return_pred_xstart=False)
+            if t == 0:
+                print('last:', t, self.num_timesteps, len(self.betas))
+                img_trans = img_t[:, :, 0:self.translation_dim]
+                img_angle = img_t[:, :, self.translation_dim+self.size_dim:self.bbox_dim] 
+                input_boxes_size  = input_boxes[:, :, self.translation_dim:self.translation_dim+self.size_dim]  
+                input_boxes_other = input_boxes[:, :, self.bbox_dim:] 
+                img_t = torch.cat([ img_trans, input_boxes_size, img_angle, input_boxes_other ], dim=-1).contiguous()
+
+        assert img_t.shape == shape
+        return img_t
+
+    def p_sample_loop_arranging(self, denoise_fn, shape, device, condition, condition_cross,
+                      noise_fn=torch.randn, clip_denoised=True, keep_running=False, input_boxes=None):
+        """
         Arrangement: complete other properies based on some propeties
         keep_running: True if we run 2 x num_timesteps, False if we just run num_timesteps
 
