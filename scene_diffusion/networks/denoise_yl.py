@@ -399,6 +399,8 @@ class Unet1DYL(nn.Module):
         merge_bbox = False,
         objectness_dim=1,
         class_dim=21,
+        use_weight=False,
+        weight_dim=21,
         translation_dim = 3,
         size_dim = 3,
         angle_dim = 1,
@@ -426,6 +428,8 @@ class Unet1DYL(nn.Module):
         self.seperate_all = seperate_all
         self.objectness_dim = objectness_dim
         self.class_dim = class_dim
+        self.use_weight = use_weight
+        self.weight_dim = weight_dim
         self.translation_dim = translation_dim
         self.size_dim = size_dim
         self.angle_dim = angle_dim
@@ -446,6 +450,7 @@ class Unet1DYL(nn.Module):
             if self.objfeat_dim  >0:
                 self.objfeat_embedf = Unet1DYL._encoder_mlp(dim, self.objfeat_dim)
             
+            self.weight_embedf = Unet1DYL._encoder_mlp(dim, self.weight_dim)
             self.class_embedf = Unet1DYL._encoder_mlp(dim, self.class_dim)
             self.bbox_embedf = Unet1DYL._encoder_mlp(dim, self.translation_dim+self.size_dim+self.angle_dim)
             if self.rel_wall_dim > 0:
@@ -540,7 +545,8 @@ class Unet1DYL(nn.Module):
                 self.objfeat_hidden2output = Unet1DYL._decoder_mlp(dim, self.objfeat_dim)
 
             self.class_hidden2output = Unet1DYL._decoder_mlp(dim, self.class_dim)
-
+            self.weight_hidden2output = Unet1DYL._decoder_mlp(dim, self.weight_dim)
+            
             self.bbox_hidden2output = Unet1DYL._decoder_mlp(dim, self.translation_dim+self.size_dim+self.angle_dim)
             print('separate unet1dyl decoder of objectness/class/translation/size/angle')
 
@@ -548,6 +554,14 @@ class Unet1DYL(nn.Module):
             self.final_conv = nn.Conv1d(dim, self.out_dim, 1)
             print('unet1d decoderyl of all object properties')
         
+        if self.use_weight:
+            for name, module in self._modules.items():
+                #print(name)
+                module.trainable = False
+            self.weight_embedf.trainable = True
+            self.weight_hidden2output.trainable = True
+            #raise NotImplementedError
+
     @staticmethod
     def _encoder_mlp(hidden_size, input_size):
         mlp_layers = [
@@ -582,7 +596,12 @@ class Unet1DYL(nn.Module):
         point_dim = self.bbox_dim+self.class_dim+self.objectness_dim+self.objfeat_dim
         
         if self.seperate_all:
-            x_class = self.class_embedf(x[:, self.bbox_dim:self.bbox_dim+self.class_dim, :])
+            if self.use_weight:
+                self.class_dim = self.weight_dim
+                x_class = self.weight_embedf(x[:, self.bbox_dim:self.bbox_dim+self.class_dim, :])
+            else:
+                x_class = self.class_embedf(x[:, self.bbox_dim:self.bbox_dim+self.class_dim, :])
+            
             if self.objectness_dim >0:
                 x_object = self.objectness_embedf(x[:, self.bbox_dim+self.class_dim:self.bbox_dim+self.class_dim+self.objectness_dim, :])
             else:
@@ -666,7 +685,10 @@ class Unet1DYL(nn.Module):
         
         if self.seperate_all:
             out_bbox  = self.bbox_hidden2output(x)
-            out_class = self.class_hidden2output(x)
+            if self.use_weight:
+                out_class = self.weight_hidden2output(x)
+            else:
+                out_class = self.class_hidden2output(x)
             out = torch.cat([out_bbox, out_class], dim=1).contiguous()
             if self.objectness_dim >0:
                 out_object = self.objectness_hidden2output(x)

@@ -1165,7 +1165,7 @@ class NovelDataset(DatasetDecoratorBase):
                     new_class_labels, np.tile(end_label[None, :], [max_length - L, 1])
                 ]).astype(np.float32) * 2.0 - 1.0 
 
-               class_weights = class_weight[np.argmax(class_labels, axis=-1)]
+                class_weights = class_weight[np.argmax(class_labels, axis=-1)]
                 new_class_weights = np.concatenate([class_weights, -np.ones((class_labels.shape[0],1))], axis=-1)
                 L, C = new_class_weights.shape
                 # Pad the end label in the end of each sequence, and convert the class labels to -1, 1

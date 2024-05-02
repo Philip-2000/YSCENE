@@ -78,6 +78,8 @@ class DiffusionSceneLayout_DDPM(Module):
         # read object property dimension
         self.objectness_dim = config.get("objectness_dim", 1)
         self.class_dim = config.get("class_dim", 21)
+        self.use_weight = config.get("use_weight", False)
+        self.weight_dim = config.get("weight_dim", 32)
         self.translation_dim = config.get("translation_dim", 3)
         self.size_dim = config.get("size_dim", 3)
         self.angle_dim = config.get("angle_dim", 1)
@@ -148,7 +150,8 @@ class DiffusionSceneLayout_DDPM(Module):
         # Unpack the sample_params
         if self.objectness_dim >0:
             objectness   = sample_params["objectness"]
-        class_labels = sample_params["class_labels"]
+        class_labels = sample_params["class_labels"] if not self.use_weight else sample_params["class_weight"]
+        self.class_dim = self.class_dim if not self.use_weight else self.weight_dim
         translations = sample_params["translations"]
         sizes = sample_params["sizes"]
         angles = sample_params["angles"]

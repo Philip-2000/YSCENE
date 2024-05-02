@@ -122,6 +122,8 @@ class GaussianDiffusion:
         # read object property dimension
         self.objectness_dim = config.get("objectness_dim", 1)
         self.class_dim = config.get("class_dim", 21)
+        self.use_weight = config.get("use_weight", False)
+        self.weight_dim = config.get("weight_dim", 32)
         self.translation_dim = config.get("translation_dim", 3)
         self.size_dim = config.get("size_dim", 3)
         self.angle_dim = config.get("angle_dim", 1)
@@ -498,6 +500,8 @@ class GaussianDiffusion:
             B, D, M, N = data_start.shape
         assert t.shape == torch.Size([B])
 
+        if self.use_weight:
+            self.class_dim = self.weight_dim
         #if noise is None:
         #    noise = torch.randn(data_start.shape, dtype=data_start.dtype, device=data_start.device)
         #assert noise.shape == data_start.shape and noise.dtype == data_start.dtype

@@ -25,7 +25,7 @@ network:
     independent_windoor: false
 
     # concate squarewish layer
-    point_dim: 43 #62 #29
+    point_dim: 41 #62 #29
     latent_dim: 0
     room_mask_condition: false # not use room_mask 
     sample_num_points: 25 # max_length 
@@ -34,6 +34,8 @@ network:
 
     objectness_dim: 0
     class_dim: 35
+    use_weight: True
+    weight_dim: 33
     angle_dim: 2
     objfeat_dim: 0 
 
@@ -62,6 +64,8 @@ network:
         channels: 43 #62 
         objectness_dim: 0
         class_dim: 35
+        use_weight: True
+        weight_dim: 33
         angle_dim: 2
         objfeat_dim: 0 #32
         ind_dim: 0
