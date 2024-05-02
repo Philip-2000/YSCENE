@@ -460,6 +460,10 @@ class CachedThreedFront(ThreedFront):
         else:
             self._objfeats_32 = ( np.array([1]), np.array([-1]), np.array([1]) )
 
+        if "oWeight" in train_stats.keys():
+            assert len(train_stats["oWeight"]) == len(train_stats["class_labels"])-2 and len(train_stats["fWeight"]) == len(train_stats["class_labels"])-2
+            self._class_weight = np.concatenate([np.array(train_stats["fWeight"]), np.array(train_stats["oWeight"])], axis=-1)
+            #raise NotImplementedError
 
         self._class_labels = train_stats["class_labels"]
         self._object_types = train_stats["object_types"]
@@ -502,3 +506,7 @@ class CachedThreedFront(ThreedFront):
     @property
     def max_wall(self):
         return self._max_wall 
+
+    @property
+    def class_weight(self):
+        return self._class_weight 

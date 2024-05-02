@@ -65,6 +65,10 @@ class DatasetDecoratorBase(Dataset):
     @property
     def max_wall(self):
         return self._dataset.max_wall 
+    
+    @property
+    def class_weight(self):
+        return self._dataset.class_weight 
 
     def post_process(self, s):
         return self._dataset.post_process(s)
@@ -965,6 +969,8 @@ class Diffusion(DatasetDecoratorBase):
 
                 singleWa = np.concatenate( [ con[:,:1]-cen[:,:1], con[:,1:2]-cen[:,2:3], con[:,2:] ], axis = -1)
                 M = singleWa.shape[0]
+                #print(maxW)
+                #raise NotImplementedError
                 # if M > maxW:print(sample_params["scene_id"])print(M)print(maxW)sample_params_target[k] = None
                 # else:
                 sample_params_target[k] = np.concatenate([singleWa, np.repeat( singleWa[-1:], maxW-M, axis = 0) ], axis = 0)
@@ -987,8 +993,8 @@ class Diffusion(DatasetDecoratorBase):
             elif k == "class_labels":
                 class_labels = np.copy(v)
                 # Delete the start label 
-                #new_class_labels = np.concatenate([class_labels[:, :-2], class_labels[:, -1:]], axis=-1) #hstack
-                new_class_labels = np.concatenate([class_labels, np.zeros((class_labels.shape[0],1))], axis=-1)
+                new_class_labels = np.concatenate([class_labels[:, :-2], class_labels[:, -1:]], axis=-1) #hstack
+                #new_class_labels = np.concatenate([class_labels, np.zeros((class_labels.shape[0],1))], axis=-1)
                 L, C = new_class_labels.shape
                 # Pad the end label in the end of each sequence, and convert the class labels to -1, 1
                 end_label = np.eye(C)[-1]
@@ -1075,6 +1081,177 @@ class Diffusion(DatasetDecoratorBase):
 
         return sample_params_target
     
+class NovelDataset(DatasetDecoratorBase):
+    def __getitem__(self, idx):
+        sample_params = self._dataset[idx]
+        max_length = self._dataset.max_length
+        maxW = self._dataset.max_wall
+        maxWD= self._dataset.max_windoor
+        class_weight= self._dataset.class_weight
+
+        # Add the number of bounding boxes in the scene
+        sample_params["length"] = sample_params["class_labels"].shape[0]
+        
+        sample_params_target = {}
+        # Compute the target from the input
+
+        for k, v in sample_params.items():
+            if k == "room_layout" or k == "length" or k == "cen" or k =="scene_id":
+                pass
+
+            elif k == "relations" or k == "description" or k == "desc_emb":
+                #print(k, len(v))
+                pass
+
+            elif k == "wd": #print(v)
+                cont = v.reshape((-1,8))
+                cen = sample_params["cen"].reshape((1,-1))
+                #vector:(windoor_scale_x, windoor_scale_z) stored as (x, y, z)
+                #norm: (windoor_norm_x, windoor_norm_z)   stored as (windoor_norm_z,-windoor_norm_x)
+                #vert: (windoor_norm_z,-windoor_norm_x)   
+                wdLength = abs(cont[:,3:4]*cont[:,6:7]-cont[:,5:6]*cont[:,7:8])
+                #length: projection: (windoor_scale_x * windoor_norm_z - windoor_scale_z * windoor_norm_x)
+                #height: windoor_scale_y
+                singleWd = np.concatenate( [ cont[:,:3]-cen[:,:3], wdLength, cont[:,4:5], cont[:,6:] ], axis = -1)
+                M = singleWd.shape[0]
+                if M > maxWD:
+                    singleWd = singleWd[:maxWD]
+                    M = maxWD
+                sample_params_target[k] = np.concatenate([singleWd, torch.ones((maxWD-M,7))*10000], axis = 0)
+                #print(singleWd)
+                #raise NotImplementedError()
+
+            elif k == "wa":
+                #print(v)
+                con = v.reshape((-1,4))
+                cen = sample_params["cen"].reshape((1,-1))
+
+                singleWa = np.concatenate( [ con[:,:1]-cen[:,:1], con[:,1:2]-cen[:,2:3], con[:,2:] ], axis = -1)
+                M = singleWa.shape[0]
+                #print(maxW)
+                #raise NotImplementedError
+                if M > maxW:
+                    print(M)
+                    print(maxW)
+                    sample_params_target[k] = None
+                    raise NotImplementedError
+                # else:
+                sample_params_target[k] = np.concatenate([singleWa, np.repeat( singleWa[-1:], maxW-M, axis = 0) ], axis = 0)
+                #print(singleWa)       
+
+            elif k == "matrix_full":
+                p = np.copy(v[0])
+                # Set the attributes to for the end symbol
+                L, M, C = p.shape
+                a = np.concatenate([p,np.zeros((L,max_length - M,C))],axis=1)
+                sample_params_target[k] = np.concatenate([a,np.zeros((max_length-L,max_length,C))],axis=0)
+
+            elif k == "matrix":
+                p = np.copy(v)
+                # Set the attributes to for the end symbol
+                L, M = p.shape
+                a = np.concatenate([p,np.zeros((L,max_length - M))],axis=1)
+                sample_params_target[k] = np.concatenate([a,np.zeros((max_length-L,max_length))],axis=0)
+
+            elif k == "class_labels":
+                class_labels = np.copy(v)
+                # Delete the start label 
+                #new_class_labels = np.concatenate([class_labels[:, :-2], class_labels[:, -1:]], axis=-1) #hstack raise NotImplementedError
+                new_class_labels = np.concatenate([class_labels, np.zeros((class_labels.shape[0],1))], axis=-1)
+                L, C = new_class_labels.shape
+                # Pad the end label in the end of each sequence, and convert the class labels to -1, 1
+                end_label = np.eye(C)[-1]
+                sample_params_target[k] = np.vstack([
+                    new_class_labels, np.tile(end_label[None, :], [max_length - L, 1])
+                ]).astype(np.float32) * 2.0 - 1.0 
+
+               class_weights = class_weight[np.argmax(class_labels, axis=-1)]
+                new_class_weights = np.concatenate([class_weights, -np.ones((class_labels.shape[0],1))], axis=-1)
+                L, C = new_class_weights.shape
+                # Pad the end label in the end of each sequence, and convert the class labels to -1, 1
+                end_label = np.eye(C)[-1]
+                sample_params_target["class_weight"] = np.vstack([
+                    new_class_weights, np.tile(end_label[None, :], [max_length - L, 1])
+                ]).astype(np.float32)
+
+            elif k == "angles" and v.shape[-1] == 2:
+                p = np.copy(v)
+                zero_angle_single = np.array([1.0, 0.0])
+                zero_angle = np.tile(zero_angle_single[None, :], [max_length - v.shape[0], 1])
+                sample_params_target[k] = np.vstack([p, zero_angle]).astype(np.float32)
+
+            else:
+                p = np.copy(v)
+                # Set the attributes to for the end symbol
+                L, C = p.shape
+                sample_params_target[k] = np.vstack([p, np.tile(np.zeros(C)[None, :], [max_length - L, 1])]).astype(np.float32)
+
+        sample_params.update(sample_params_target)
+
+        return sample_params
+    
+    def collate_fn(self, samples):
+        ''' Collater that puts each data field into a tensor with outer dimension
+            batch size.
+        Args:
+            samples: samples
+        '''
+    
+        samples = list(filter(lambda x: x is not None, samples))
+        return dataloader.default_collate(samples)
+
+    @property
+    def bbox_dims(self):
+        return 7
+
+    def pre_process(self, s, transform=False):
+        #return self._dataset.pre_process(s)
+        max_length = self._dataset.max_length
+        if transform:
+            s = {
+                "class_labels":s[:,:,:-7],
+                "translations":s[:,:,-7:-4],
+                "sizes":s[:,:,-4:-1],
+                "angles":s[:,:,-1:]
+            }
+
+        s = self._dataset.pre_process(s)
+        sample_params_target = {}
+        for k, v in s.items():
+            if k == "class_labels":
+                class_labels = np.copy(v[0])
+                # Delete the start label 
+                new_class_labels = np.concatenate([class_labels, -np.ones((class_labels.shape[0],1))],axis=-1) #hstack
+                L, C = new_class_labels.shape
+                # Pad the end label in the end of each sequence, and convert the class labels to -1, 1
+                end_label = np.eye(C)[-1]
+                sample_params_target[k] = np.vstack([
+                    new_class_labels, np.tile(end_label[None, :], [max_length - L, 1])
+                ]).astype(np.float32) * 2.0 - 1.0 
+
+            elif k == "angles" and v.shape[-1] == 2:
+                p = np.copy(v[0])
+                zero_angle_single = np.array([1.0, 0.0])
+                zero_angle = np.tile(zero_angle_single[None, :], [max_length - v.shape[1], 1])
+                sample_params_target[k] = np.vstack([p, zero_angle]).astype(np.float32)
+
+            else:
+                p = np.copy(v[0])
+                # Set the attributes to for the end symbol
+                L, C = p.shape
+                sample_params_target[k] = np.vstack([p, np.tile(np.zeros(C)[None, :], [max_length - L, 1])]).astype(np.float32)
+
+        if transform:
+            sample_params_target = np.concatenate([
+                [sample_params_target["translations"]],
+                [sample_params_target["sizes"]],
+                [sample_params_target["angles"]],
+                [sample_params_target["class_labels"]]
+            ], axis=-1)
+
+        sample_params_target = torch.Tensor(sample_params_target)
+
+        return sample_params_target
 
 def dataset_encoding_factory(
     name,
@@ -1187,6 +1364,12 @@ def dataset_encoding_factory(
         elif "wocm_no_prm" in name:
             return Diffusion(dataset_collection)
         elif "wocm" in name:
+            if "novel" in name:
+                dataset_collection = Permutation(
+                    dataset_collection,
+                    permute_keys,
+                )
+                return NovelDataset(dataset_collection)
             dataset_collection = Permutation(
                 dataset_collection,
                 permute_keys,
