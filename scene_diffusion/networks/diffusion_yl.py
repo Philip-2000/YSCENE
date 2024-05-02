@@ -477,6 +477,68 @@ class GaussianDiffusion:
         assert imgs[-1].shape == shape
         return imgs
 
+    def p_sample_loop_complete(self, denoise_fn, shape, device, condition, condition_cross,
+                      noise_fn=torch.randn, clip_denoised=True, keep_running=False, partial_boxes=None):
+        """
+        Complete samples based on partial samples
+        keep_running: True if we run 2 x num_timesteps, False if we just run num_timesteps
+
+        """
+
+        assert isinstance(shape, (tuple, list))
+        img_t = noise_fn(size=shape, dtype=torch.float, device=device)
+        for t in reversed(range(0, self.num_timesteps if not keep_running else len(self.betas))):
+            t_ = torch.empty(shape[0], dtype=torch.int64, device=device).fill_(t)
+
+            # diffusion clean scenes
+            noise =  noise_fn(size=partial_boxes.shape, dtype=torch.float, device=device)
+            partial_boxes_t = self.q_sample(x_start=partial_boxes, t=t_, noise=noise)
+            num_partial = partial_boxes_t.shape[1]
+
+            # combine noisy version of clean scenes & denoising scenes
+            img_t = torch.cat([ partial_boxes_t, img_t[:, num_partial:, :] ], dim=1).contiguous()
+
+            # reverse diffusion
+            img_t = self.p_sample(denoise_fn=denoise_fn, data=img_t,t=t_, condition=condition, condition_cross=condition_cross, noise_fn=noise_fn,
+                                clip_denoised=clip_denoised, return_pred_xstart=False)
+            if t == 0:
+                print('last:', t, self.num_timesteps, len(self.betas))
+                img_t = torch.cat([ partial_boxes, img_t[:, num_partial:, :] ], dim=1).contiguous()
+
+        assert img_t.shape == shape
+        return img_t
+
+    def p_sample_loop_arrange(self, denoise_fn, shape, device, condition, condition_cross,
+                      noise_fn=torch.randn, clip_denoised=True, keep_running=False, input_boxes=None):
+        """
+        Arrangement: complete other properies based on some propeties
+        keep_running: True if we run 2 x num_timesteps, False if we just run num_timesteps
+
+        """
+
+        assert isinstance(shape, (tuple, list))
+        img_t = noise_fn(size=(shape[0], shape[1], self.translation_dim+self.angle_dim), dtype=torch.float, device=device)
+        for t in reversed(range(0, self.num_timesteps if not keep_running else len(self.betas))):
+            t_ = torch.empty(shape[0], dtype=torch.int64, device=device).fill_(t)
+
+            # reverse diffusion
+            img_t = self.p_sample(denoise_fn=denoise_fn, data=img_t,t=t_, condition=condition, condition_cross=condition_cross, noise_fn=noise_fn,
+                                clip_denoised=clip_denoised, return_pred_xstart=False)
+            if t == 0:
+                print('last:', t, self.num_timesteps, len(self.betas))
+                img_t_trans = img_t[:, :, 0:self.translation_dim]
+                img_t_angle = img_t[:, :, self.translation_dim:] 
+                
+                input_boxes_trans = input_boxes[:, :, 0:self.translation_dim]
+                input_boxes_size  = input_boxes[:, :, self.translation_dim:self.translation_dim+self.size_dim]  
+                input_boxes_angle = input_boxes[:, :, self.translation_dim+self.size_dim:self.bbox_dim] 
+                input_boxes_other = input_boxes[:, :, self.bbox_dim:] 
+                img_t = torch.cat([ img_t_trans, input_boxes_size, img_t_angle, input_boxes_other ], dim=-1).contiguous()
+
+        assert img_t.shape == shape
+        return img_t
+
+
     '''losses'''
 
     def _vb_terms_bpd(self, denoise_fn, data_start, data_t, t, condition, condition_cross, clip_denoised: bool, return_pred_xstart: bool):
@@ -825,3 +887,16 @@ class DiffusionPoint(nn.Module):
         return self.diffusion.p_continue_loop_trajectory(self._denoise, shape=shape, device=device, condition=condition, condition_cross=condition_cross, start_value=start_value, start_step=start_step, end_step=end_step, noise_fn=noise_fn, freq=freq,
                                                        clip_denoised=clip_denoised, wallTensor=wallTensor, windoorTensor=windoorTensor,
                                                        keep_running=keep_running)
+
+    def complete_samples(self, shape, device, condition=None, condition_cross=None, noise_fn=torch.randn,
+                    clip_denoised=True, keep_running=False, partial_boxes=None):
+        return self.diffusion.p_sample_loop_complete(self._denoise, shape=shape, device=device, condition=condition, condition_cross=condition_cross, noise_fn=noise_fn,
+                                            clip_denoised=clip_denoised,
+                                            keep_running=keep_running, partial_boxes=partial_boxes)
+
+    def arrange_samples(self, shape, device, condition=None, condition_cross=None, noise_fn=torch.randn,
+                    clip_denoised=True, keep_running=False, input_boxes=None):
+        
+        return self.diffusion.p_sample_loop_arrange(self._denoise, shape=shape, device=device, condition=condition, condition_cross=condition_cross, noise_fn=noise_fn,
+                                            clip_denoised=clip_denoised,
+                                            keep_running=keep_running, input_boxes=input_boxes)
