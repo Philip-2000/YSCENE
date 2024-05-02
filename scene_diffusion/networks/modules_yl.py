@@ -631,6 +631,8 @@ class relaYL():
         self.objectness_dim = config.get("objectness_dim", 0) #exist or not, if objectness_dim=0, 
                                             #then we use the last digit of class_dim (or "end_label") as the objectness
         self.class_dim = config.get("class_dim", 25)
+        self.use_weight = config.get("use_weight", False)
+        self.weight_dim = config.get("weight_dim", 32)
         self.translation_dim = config.get("translation_dim", 3)
         self.size_dim = config.get("size_dim", 3)
         self.angle_dim = config.get("angle_dim", 2)
@@ -638,6 +640,8 @@ class relaYL():
         self.objfeat_dim = config.get("objfeat_dim", 0)
         self.point_dim = config.get("point_dim", 65)
         self.maxObj = config.get("sample_num_points", 21)
+        if self.use_weight:
+            self.class_dim = self.weight_dim
         
         if self.point_dim != self.bbox_dim+self.class_dim+self.objectness_dim+self.objfeat_dim:
             raise NotImplementedError
