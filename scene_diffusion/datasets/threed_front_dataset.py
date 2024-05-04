@@ -1262,6 +1262,7 @@ def dataset_encoding_factory(
     # NOTE: The ordering might change after augmentations so really it should
     #       be done after the augmentations. For class frequencies it is fine
     #       though.
+    # 123
     if "cached" in name:
         if "objfeats" in name:
             if "lat32" in name:
