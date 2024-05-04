@@ -99,6 +99,21 @@ class DataEncoder(BoxOrderedDataset):
     def property_type(self):
         raise NotImplementedError()
 
+class SceneTypeEncoder(DataEncoder):
+    @property
+    def property_type(self):
+        return "scene_type"
+
+    def __getitem__(self, idx):
+        scene = self._dataset[idx]
+        boxes = self._get_boxes(idx)
+        # L = len(boxes)  # sequence length
+        scene_type = self._dataset["scene_type"]
+        # for bs in enumerate(boxes):
+            # scene_type = bs.scene_type
+        return scene_type
+
+
 
 class RoomLayoutEncoder(DataEncoder):
     @property
@@ -747,6 +762,13 @@ class Add_Text(DatasetDecoratorBase):
         first_n_names = obj_names[:first_n] 
         first_n_counts = Counter(first_n_names)
 
+        s0 = 'This is a '
+        scene_type = sample['scene_id'].split('-')[0]
+        s0 += scene_type
+        s0 += '.'
+        sentences.append(s0.lower())
+
+
         s = 'The room has '
         for ndx, name in enumerate(sorted(set(first_n_names), key=first_n_names.index)):
             if ndx == len(set(first_n_names)) - 1 and len(set(first_n_names)) >= 2:
@@ -1262,7 +1284,6 @@ def dataset_encoding_factory(
     # NOTE: The ordering might change after augmentations so really it should
     #       be done after the augmentations. For class frequencies it is fine
     #       though.
-    # 123
     if "cached" in name:
         if "objfeats" in name:
             if "lat32" in name:
@@ -1290,6 +1311,7 @@ def dataset_encoding_factory(
             dataset,
             box_ordering
         )
+        scene_type = SceneTypeEncoder(box_ordered_dataset)
         room_layout = RoomLayoutEncoder(box_ordered_dataset)
         class_labels = ClassLabelsEncoder(box_ordered_dataset)
         translations = TranslationEncoder(box_ordered_dataset)
@@ -1299,6 +1321,7 @@ def dataset_encoding_factory(
         objfeats_32 = ObjFeat32Encoder(box_ordered_dataset)
 
         dataset_collection = DatasetCollection(
+            scene_type,
             room_layout,
             class_labels,
             translations,
@@ -1310,6 +1333,7 @@ def dataset_encoding_factory(
 
     if name == "basic":
         return DatasetCollection(
+            scene_type,
             class_labels,
             translations,
             sizes,

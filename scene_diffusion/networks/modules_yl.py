@@ -1058,7 +1058,7 @@ class relaYL():
         swaptWE = torch.cat([swaptWS[:,:,1:,:], swaptWS[:,:,:1,:]], axis=-2)
         bbb = self.norm_Minus(swaptWE, wallNorm.reshape((self.batchsz,1,-1,self.wall_norm_dim)))[:,:,:,1] 
         aaabbb = aaa * bbb
-        cond = aaabbb < torch.zeros_like(aaabbb)
+        cond = aaabbb > torch.zeros_like(aaabbb)
         #cond = lengthSquare < lenSquare.reshape((self.batchsz,1,-1))
         if prt:
             print("cond")
