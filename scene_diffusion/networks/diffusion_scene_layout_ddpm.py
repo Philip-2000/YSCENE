@@ -329,14 +329,22 @@ class DiffusionSceneLayout_DDPM(Module):
         else:
             condition_cross = None
             
+        if input_boxes is not None:
+            print('scene arrangement sampling')
+            samples = self.diffusion.arrange_samples(noise.shape, room_mask.device, condition=condition, condition_cross=condition_cross, clip_denoised=clip_denoised, input_boxes=input_boxes)
 
-        print('unconditional / conditional generation sampling')
-        # reverse sampling
-        if ret_traj:
-            samples = self.diffusion.gen_sample_traj(noise.shape, room_mask.device, freq=freq, condition=condition, condition_cross=condition_cross, clip_denoised=clip_denoised, wallTensor=wallTensor, windoorTensor=windoorTensor)
+        elif partial_boxes is not None:
+            print('scene completion sampling')
+            samples = self.diffusion.complete_samples(noise.shape, room_mask.device, condition=condition, condition_cross=condition_cross, clip_denoised=clip_denoised, partial_boxes=partial_boxes)
+
         else:
-            samples = self.diffusion.gen_samples(noise.shape, room_mask.device, condition=condition, condition_cross=condition_cross, clip_denoised=clip_denoised, wallTensor=wallTensor, windoorTensor=windoorTensor)
-        
+            print('unconditional / conditional generation sampling')
+            # reverse sampling
+            if ret_traj:
+                samples = self.diffusion.gen_sample_traj(noise.shape, room_mask.device, freq=freq, condition=condition, condition_cross=condition_cross, clip_denoised=clip_denoised, wallTensor=wallTensor, windoorTensor=windoorTensor)
+            else:
+                samples = self.diffusion.gen_samples(noise.shape, room_mask.device, condition=condition, condition_cross=condition_cross, clip_denoised=clip_denoised, wallTensor=wallTensor, windoorTensor=windoorTensor)
+            
         return samples
 
     def Continue(self, room_mask, num_points, point_dim, batch_size=1, text=None, 
@@ -454,6 +462,20 @@ class DiffusionSceneLayout_DDPM(Module):
             k_time = num_step * i
             boxes_traj[k_time] = self.delete_empty_from_network_samples(samples, batch_size, device=device, keep_empty=keep_empty)
         return boxes_traj
+
+    @torch.no_grad()
+    def complete_scene(self, room_mask, num_points, point_dim, partial_boxes, batch_size=1, ret_traj=False, ddim=False, clip_denoised=False, batch_seeds=None, device="cpu", keep_empty=False):
+        
+        samples = self.sample(room_mask, num_points, point_dim, batch_size, partial_boxes=partial_boxes, ret_traj=ret_traj, ddim=ddim, clip_denoised=clip_denoised, batch_seeds=batch_seeds)
+
+        return self.delete_empty_from_network_samples(samples, device=device, keep_empty=keep_empty)
+    
+    @torch.no_grad()
+    def arrange_scene(self, room_mask, num_points, point_dim, input_boxes, batch_size=1, ret_traj=False, ddim=False, clip_denoised=False, batch_seeds=None, device="cpu", keep_empty=False):
+        
+        samples = self.sample(room_mask, num_points, point_dim, batch_size, input_boxes=input_boxes, ret_traj=ret_traj, ddim=ddim, clip_denoised=clip_denoised, batch_seeds=batch_seeds)
+
+        return self.delete_empty_from_network_samples(samples, device=device, keep_empty=keep_empty)
     
     @torch.no_grad()
     def delete_empty_from_network_samples(self, samples, batch_size=1, device="cpu", keep_empty=False):

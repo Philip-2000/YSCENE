@@ -397,7 +397,7 @@ class CachedThreedFront(ThreedFront):
             "sizes": D["sizes"],
             "angles": D["angles"],
             "cen": D["floor_plan_centroid"],
-            #"scene_id": D["scene_id"],
+            "scene_id": D["scene_id"],
             #"matrix": E["matrix"],
             #"matrix_full": EF["matrix_full"],
 
