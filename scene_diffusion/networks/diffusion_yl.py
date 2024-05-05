@@ -15,6 +15,7 @@ from .loss import axis_aligned_bbox_overlaps_3d
 from .modules_yl import relaYL
 from .denoise_yl import Unet1DYL
 from .relative_loss import relative_loss
+from .classifier_guidance import cg
 
 def norm(v, f):
     v = (v - v.min())/(v.max() - v.min()) - 0.5
@@ -132,6 +133,9 @@ class GaussianDiffusion:
         self.rel_loss_rate = config.get("rel_loss_rate", -1)
         self.process_wall = config.get("process_wall", False)
         self.process_windoor = config.get("process_windoor", False)
+        self.use_classifier_guidance = config.get("use_classifier_guidance", False)
+        if self.use_classifier_guidance:
+            self.classifier_guidance = cg(config, betas)
         self.loss_separate = loss_separate
         self.loss_iou = loss_iou
         if self.loss_iou:
@@ -403,6 +407,8 @@ class GaussianDiffusion:
             t_ = torch.empty(shape[0], dtype=torch.int64, device=device).fill_(t)
             img_t = self.p_sample(denoise_fn=denoise_fn, data=img_t,t=t_, condition=condition, condition_cross=condition_cross, noise_fn=noise_fn,
                                   clip_denoised=clip_denoised, return_pred_xstart=False, wallTensor=wallTensor, windoorTensor=windoorTensor)
+            if self.use_classifier_guidance:
+                img_t = self.classifier_guidance.full(img_t, wallTensor, t_)
 
         assert img_t.shape == shape
         return img_t

@@ -3,7 +3,7 @@ import torch.nn.functional as F
 
 
 class classifier_guidance():
-    def __init__(self, config):
+    def __init__(self, config, betas):
         #all kinds of dimensions here
         self.batchsz = config.get("batchsz", 4)
 
@@ -30,6 +30,7 @@ class classifier_guidance():
         self.temp = torch.Tensor([[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]])
         self.sample_dim = self.temp.shape[0]
         self.border = 0.1
+        self.maxT = 0.5
         pass
     
     def flatten(self, absolute):
@@ -164,10 +165,10 @@ class classifier_guidance():
         scale = (originalDirection * rotatedFields).mean(axis=-2) * (4/3)
         #print(scale[2][4])
         
-        absolute[:,:,0:1] += translate[:,:,0:1] * t
-        absolute[:,:,self.translation_dim-1:self.translation_dim] += translate[:,:,1:2] * t
-        absolute[:,:,self.translation_dim:self.translation_dim+1] += scale[:,:,0:1] * t
-        absolute[:,:,self.translation_dim+self.size_dim-1:self.translation_dim+self.size_dim] += scale[:,:,1:2] * t
+        absolute[:,:,0:1] += translate[:,:,0:1] * t.reshape((-1,1,1))
+        absolute[:,:,self.translation_dim-1:self.translation_dim] += translate[:,:,1:2] * t.reshape((-1,1,1))
+        absolute[:,:,self.translation_dim:self.translation_dim+1] += scale[:,:,0:1] * t.reshape((-1,1,1))
+        absolute[:,:,self.translation_dim+self.size_dim-1:self.translation_dim+self.size_dim] += scale[:,:,1:2] * t.reshape((-1,1,1))
 
         #absoluteVector: batchsz = 128 : maxObj = 12 : angle_dim = 2
         absoluteVector = absolute[:,:,self.bbox_dim-self.angle_dim:self.bbox_dim].reshape((self.batchsz, self.maxObj, 1, self.angle_dim))
@@ -182,6 +183,10 @@ class classifier_guidance():
         return absolute, translate, mats, scale
         #denoise_out is the difference in the objects' own co-ordinates of ABSOLUTETENSOR
 
+    def tArrangement(self,t):
+        return (self.maxT*(1. - t / torch.float(self.betas.shape[0]))).reshape((-1,1))
+
+
     def full(self, absolute, wallTensor, t):
         directions, locations = self.flatten(absolute)
         # print("locations.shape")
@@ -189,7 +194,7 @@ class classifier_guidance():
         fields = self.field(locations, wallTensor)
         # print("fields.shape")
         # print(fields.shape)
-        result, tr, ro, sc = self.synthesis(directions, fields, absolute, t)
+        result, tr, ro, sc = self.synthesis(directions, fields, absolute, self.tArrangement(t))
         return result
 
 
